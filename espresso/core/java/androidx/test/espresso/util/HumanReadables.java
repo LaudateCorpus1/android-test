@@ -227,7 +227,7 @@ public final class HumanReadables {
         .add("is-focusable", v.isFocusable())
         .add("is-layout-requested", v.isLayoutRequested())
         .add("is-selected", v.isSelected())
-        .add("layout-params", v.getLayoutParams())
+        .add("layout-params", sanitizeClassToString(v.getLayoutParams()))
         .add("tag", v.getTag());
 
     if (null != v.getRootView()) {
@@ -262,6 +262,15 @@ public final class HumanReadables {
       innerDescribe((ViewGroup) v, helper);
     }
     return helper.toString();
+  }
+
+  /**
+   * If the description is an object in the format "Class@address", remove the address field at the
+   * end to result in a more stable log output. The object's address is rarely relevant in a view
+   * hierarchy dump.
+   */
+  private static String sanitizeClassToString(Object object) {
+    return object == null ? null : object.toString().replaceAll("@[A-Fa-f0-9]+$", "");
   }
 
   private static void innerDescribe(TextView textBox, ToStringHelper helper) {
