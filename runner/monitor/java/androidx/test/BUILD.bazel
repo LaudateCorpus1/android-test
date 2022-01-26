@@ -24,6 +24,7 @@ android_library(
         ":errorprone_neverlink",
         ":runtime_hidden_apis",
         "//:androidx_annotation",
+        "//:androidx_tracing",
         "//annotation",
     ],
 )

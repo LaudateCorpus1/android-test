@@ -28,6 +28,7 @@ import androidx.test.espresso.IdlingResource;
 import androidx.test.espresso.base.IdlingResourceRegistry.IdleNotificationCallback;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.LargeTest;
+import androidx.test.platform.tracing.Tracing;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import java.util.List;
@@ -53,7 +54,7 @@ public class IdlingResourceRegistryTest {
   public void setUp() throws Exception {
     Looper looper = Looper.getMainLooper();
     handler = new Handler(looper);
-    registry = new IdlingResourceRegistry(looper);
+    registry = new IdlingResourceRegistry(looper, Tracing.getInstance());
   }
 
   @Test

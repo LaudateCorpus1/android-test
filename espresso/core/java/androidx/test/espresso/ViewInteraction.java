@@ -38,6 +38,8 @@ import androidx.test.espresso.remote.RemoteInteraction;
 import androidx.test.espresso.util.HumanReadables;
 import androidx.test.internal.platform.os.ControlledLooper;
 import androidx.test.internal.util.Checks;
+import androidx.test.platform.tracing.Tracer.Span;
+import androidx.test.platform.tracing.Tracing;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -80,6 +82,7 @@ public final class ViewInteraction {
   private final RemoteInteraction remoteInteraction;
   private final ListeningExecutorService remoteExecutor;
   private final TestFlowVisualizer testFlowVisualizer;
+  private final Tracing tracer;
   // test thread only
   private boolean hasRootMatcher = false;
 
@@ -95,7 +98,8 @@ public final class ViewInteraction {
       RemoteInteraction remoteInteraction,
       ListeningExecutorService remoteExecutor,
       ControlledLooper controlledLooper,
-      TestFlowVisualizer testFlowVisualizer) {
+      TestFlowVisualizer testFlowVisualizer,
+      Tracing tracer) {
     this.viewFinder = checkNotNull(viewFinder);
     this.uiController = (InterruptableUiController) checkNotNull(uiController);
     this.failureHandler = checkNotNull(failureHandler);
@@ -107,6 +111,7 @@ public final class ViewInteraction {
     this.remoteExecutor = checkNotNull(remoteExecutor);
     this.controlledLooper = checkNotNull(controlledLooper);
     this.testFlowVisualizer = checkNotNull(testFlowVisualizer);
+    this.tracer = tracer;
   }
 
   /**
@@ -171,16 +176,24 @@ public final class ViewInteraction {
 
   private void desugaredPerform(
       final SingleExecutionViewAction va, int actionIndex, boolean testFlowEnabled) {
+    ViewAction innerViewAction = va.getInnerViewAction();
+
     Callable<Void> performInteraction =
         new Callable<Void>() {
           @Override
           public Void call() {
-            doPerform(va, actionIndex, testFlowEnabled);
+            try (Span ignored =
+                tracer.beginSpan(
+                    "ViewInteraction-perform-"
+                        + actionIndex
+                        + "-"
+                        + innerViewAction.getClass().getSimpleName())) {
+              doPerform(va, actionIndex, testFlowEnabled);
+              doPerform(va, actionIndex, testFlowEnabled);
+            }
             return null;
           }
         };
-
-    ViewAction innerViewAction = va.getInnerViewAction();
 
     List<ListenableFuture<Void>> interactions = new ArrayList<>();
     interactions.add(postAsynchronouslyOnUiThread(performInteraction));
@@ -301,21 +314,25 @@ public final class ViewInteraction {
         new Callable<Void>() {
           @Override
           public Void call() {
-            uiController.loopMainThreadUntilIdle();
+            try (Span ignored =
+                tracer.beginSpan(
+                    "ViewInteraction-check-" + viewAssert.getClass().getSimpleName())) {
+              uiController.loopMainThreadUntilIdle();
 
-            View targetView = null;
-            NoMatchingViewException missingViewException = null;
-            try {
-              targetView = viewFinder.getView();
-            } catch (NoMatchingViewException nsve) {
-              missingViewException = nsve;
+              View targetView = null;
+              NoMatchingViewException missingViewException = null;
+              try {
+                targetView = viewFinder.getView();
+              } catch (NoMatchingViewException nsve) {
+                missingViewException = nsve;
+              }
+              Log.i(
+                  TAG,
+                  String.format(
+                      Locale.ROOT, "Checking '%s' assertion on view %s", viewAssert, viewMatcher));
+              singleExecutionViewAssertion.check(targetView, missingViewException);
+              return null;
             }
-            Log.i(
-                TAG,
-                String.format(
-                    Locale.ROOT, "Checking '%s' assertion on view %s", viewAssert, viewMatcher));
-            singleExecutionViewAssertion.check(targetView, missingViewException);
-            return null;
           }
         };
 
